@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "http-server . -p 8080"
+    "start:1": "http-server ./1 -p 8080",
+    "start:2": "http-server ./2 -p 8081"
   },
   "keywords": [],
   "author": "",

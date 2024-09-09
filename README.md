@@ -1,10 +1,14 @@
+# 浏览器的 HTTP 缓存体系
+
+
+
 ## 前言
 
-说起浏览器的 HTTP 缓存，总会提到强缓存、协商缓存、新鲜度、`Cache-Control`、`Expires`、`If-Modified-Since`、`If-None-Match`、`Last-Modified`、`ETags` 等关键词，它们对我来说既熟悉又陌生，总是记了又忘，忘了再记。归根到底是自己没有形成一个体系化的认知。
+说起浏览器的 HTTP 缓存，总会提到强缓存、协商缓存、新鲜度、Cache-Control、Expires、If-Modified-Since、If-None-Match、Last-Modified、ETags 等词语，它们对我来说既熟悉又陌生，总是记了又忘，忘了再记。归根到底是自己没有形成一个体系化的认知。
 
-前不久看到了一篇文章《彻底弄懂浏览器缓存策略-基于缓存策略三要素分解法》，虽然时间久远，但是文中提出的缓存三大策略，即存储策略、过期策略、对比策略，让我有了一个系统学习缓存知识的路径，我也将基于这个思路，记录我的学习内容。
+前不久看到了一篇文章[《彻底弄懂浏览器缓存策略-基于缓存策略三要素分解法》](https://mp.weixin.qq.com/s/qOMO0LIdA47j3RjhbCWUEQ)，虽然时间久远，但是文中提出的缓存三大策略，即存储策略、过期策略、对比策略，让我有了一个系统学习缓存知识的路径，我也将基于这个思路，记录我的学习内容。
 
-在学习缓存相关的知识前，要先明确一件事，浏览器为什么要缓存 HTTP 响应？
+在学习缓存相关的知识前，要先明确一件事，浏览器为什么要缓存 HTTP 响应？无非是以下三件事：
 
 - 减少网络流量，节省带宽；
 - 减少回源请求次数，减轻服务器负载；
@@ -22,13 +26,13 @@
 
 如上文所说，缓存存储策略是为了解决响应是否可以被缓存的问题。这一般取决于服务端的设置，或遵循浏览器的默认行为。
 
-缓存存储策略受响应的 `Cache-Control` 头部或 `Expires` 头部的控制。`Cache-Control` 的取值 `max-age`、`no-cache`、`no-store` 都是用来指明响应内容是否可以被浏览器缓存的，其中前 2 种取值都会缓存文件数据（`no-cache` 应理解为“不建议使用本地缓存”，其仍然会缓存数据到本地），`no-store` 则不会在浏览器缓存任何响应数据。
+缓存存储策略受响应的 `Cache-Control` 头或 `Expires` 头的控制。``Cache-Control` 的取值 `max-age`、`no-cache`、`no-store` 都是用来指明响应内容是否可以被浏览器缓存的，其中前 2 种取值都会缓存文件数据（`no-cache` 应理解为“不建议使用本地缓存”，其仍然会缓存数据到本地），`no-store` 则不会在浏览器缓存任何响应数据。
 
 
 
-> Cache-Control 的取值有很多，且要区别 request Cache-Control 与 response Cache-Control，对于 response Cache-Control 来说，有如下几种取值：
+> `Cache-Control` 的取值有很多，且要区别 request Cache-Control 与 response Cache-Control。仅对于 response Cache-Control 来说，有如下几类取值：
 >
-> 1. 基本缓存控制指令
+>   1. 基本缓存控制指令
 >   - **no-store**：绝对禁止缓存数据。
 >   - **no-cache**：资源可以被缓存，但在使用之前必须重新验证其有效性。
 >   - **public**：指示响应可以被任何缓存区缓存。
@@ -42,45 +46,136 @@
 >
 >   3. 其他指令
 >   - **immutable**：表明响应正文不会随时间改变，直到过期。
->   - **stale-while-revalidate=[seconds]**：在后台异步检查缓存的同时，客户端使用过期的缓存的时间。
->   - **stale-if-error=[seconds]**：如果在重新验证缓存时服务器出错，客户端使用过期的缓存的时间。
+>   - **stale-while-revalidate=[seconds]**：在后台异步检查缓存时，客户端使用过期缓存的时间。
+>   - **stale-if-error=[seconds]**：如果重新验证缓存时服务器出错，客户端使用过期缓存的时间。
 >
->   在此之上，这些指令可以组合使用。由于本文主要关注浏览器的缓存，因此先详细了解部分取值（`no-cache`、`no-store`、`max-age` 以及 `public`、`private`）。
+> 
+>
+> 由于本文主要关注浏览器的缓存机制，因此需详细了解 `no-cache`、`no-store`、`max-age` 以及 `public`、`private` 这几种取值。
 
 
+
+#### 实际验证
 
 我在本地搭建了一个简单的场景进行验证:
 
-// image
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Client 2</title>
+</head>
+<body>
+  <img src="http://localhost/test-image" width="200" height="200" alt="test-image">
+  <script>
+    (async function() {
+      const response = await fetch('http://localhost/test-request');
+      const data = await response.json();
+      
+      console.log(data);
+    })();
+  </script>
+</body>
+</html>
+
+```
+
+
 
 分别使用 `<img>` 标签和 `fetch` API 去获取远程资源。对于图片资源，我需要浏览器缓存一段时间，对于 json 数据，我需要浏览器不缓存，因此我在 Server 端对响应设置了不同的 `Cache-Control`:
 
-// image
+```js
+router.get('/:path*/test-image', async (ctx) => {
+    ...
+    
+    ctx.type = 'image/jpeg';
+    ctx.set('Cache-Control', 'max-age=3600');
+
+    ...
+})
+
+router.all('/:path*/test-request', async (ctx) => {
+    ...
+
+    ctx.type = 'json';
+    ctx.set('Cache-Control', 'no-store');
+
+    ...
+});
+```
+
+
 
 再次请求页面时，发现浏览器确实缓存了图片资源，未缓存 json 数据:
 
-// image
+![image-20240906130445842](./README.assets/image-20240906130445842.png)
+
+
 
 > 直接在浏览器的地址栏中输入 URL 去请求资源时，浏览器通常不会遵循常规缓存策略。因为这种请求行为往往更倾向于获取到最新的资源，避免因为使用了过时的缓存而导致问题或误解。
 >
 > 这与通过页面内元素（如 `<img>` 标签）或脚本（如 `fetch` API）发起的请求略有不同，后者更依赖并遵循 HTTP 缓存头的指示进行资源的缓存和重用。
 >
-> // image
+> ![image-20240906130411373](./README.assets/image-20240906130411373.png)
 
 
 
-如果一个响应设置了符合规范的 HTTP 头部，它的缓存存储策略是比较清晰的。但是如果没有设置 HTTP 头部，或者设置的 HTTP 头部不完整，缓存存储策略就要结合浏览器的默认行为来看。
-
-**请求资源时，响应携带 Cache-Control: no-cache, 或 Cache-Control: max-age=0**
-
-- 响应头中包含 `Cache-Control: no-cache` 时，意味着浏览器可以缓存这个资源。但是使用缓存资源时，浏览器必须向服务器验证这个缓存的资源是否仍然是最新的；
-- 响应头中包含 `Cache-Control: max-age=0` 时，意味着浏览器可以缓存这个资源，但是缓存的最大有效时间为 0 秒，立即过期。使用缓存资源时，浏览器必须向服务器验证这个缓存的资源是否仍然是最新的；
+这就是一个利用缓存存储策略的最小化场景，即验证以下两种情况：
 
 **请求资源时，响应携带 Cache-Control: no-store**
 
-- 这种情况下，响应被视为 "public"；
-- 如果没有明确指定 private，且设置了 max-age，则默认为 public。这是因为设置了可以缓存的时间，但没有限制谁可以缓存；
-- 但是对于某些特殊响应（如包含 Authorization 头的请求）可能默认被视为 private；
+- 服务器在响应中设置了 `Cache-Control: no-store` 指令时，这意味着浏览器（以及任何中间缓存，如代理服务器）被要求不存储任何关于客户端请求和服务器响应的任何部分；
+
+**请求资源时，响应携带 Cache-Control: max-age=3600**
+
+- 服务器在响应中设置了 `Cache-Control: max-age=3600` 指令时，这意味着浏览器（以及任何中间缓存，如代理服务器）被指示可以将该响应存储在缓存中，并且可以在接下来的 3600 秒（即 1 小时）内重用该缓存，而无需再次向服务器请求；
+
+
+
+但是在实际情况下，场景会复杂一些，而且我们上面也提到了，缓存存储策略不仅受 `Cache-Control` 头控制，还有 `Expires` 头也需要考虑，我们接下来再多验证几种情况：
+
+**请求资源时，服务端的响应没有携带 Cache-Control，携带了 Expires**
+
+- 服务器在响应中仅设置了 `Expires` 头时，浏览器的行为将依赖于 `Expires` 头来决定缓存策略。`Expires` 头提供了一个具体的日期/时间，告诉浏览器该资源在这个时间点之前都被认为是新鲜的，可以从缓存中直接获取而无需向服务器再次请求；
+
+![image-20240906145140764](./README.assets/image-20240906145140764.png)
+
+![image-20240906145221343](./README.assets/image-20240906145221343.png)
+
+
+
+**请求资源时，服务端的响应同时携带了 Cache-Control 和 Expires**
+
+- 如果响应中同时存在 `Cache-Control` 和 `Expires`，浏览器会优先考虑 `Cache-Control` 的指令。例如，如果 `Cache-Control` 设置为 `max-age=3600`（资源应在 3600 秒后被视为过期），这将覆盖 `Expires` 头中的任何日期/时间设置。
+
+![image-20240906150254461](./README.assets/image-20240906150254461.png)
+
+![image-20240906150320989](./README.assets/image-20240906150320989.png)
+
+
+
+**请求资源时，服务端的响应没有携带 Cache-Control 和 Expires**
+
+- 在没有明确缓存指令的情况下，大多数现代浏览器会尝试使用启发式方法来决定资源的缓存时间。这通常基于资源的最后修改时间（如果有的话）：
+  1. 如果响应头中包含 `Last-Modified` 日期，浏览器可能会使用这个日期与响应被接收的时间之间的差值的一部分（如10%）来估算一个缓存时间。这意味着如果资源经常被更新，它可能会被较短时间地缓存；如果很少更新，可能会被较长时间地缓存；
+  2. 如果没有 `Last-Modified` 或其他明确的缓存信息，浏览器可能默认设置资源不被缓存。这种行为可以防止浏览器缓存可能已经变更的资源；
+  3. Content-Type 可能影响缓存决策。静态资源（如图片、CSS）更可能被缓存。动态内容可能不会被缓存或只短暂缓存；
+
+![image-20240906150817267](./README.assets/image-20240906150817267.png)
+
+![image-20240906150830431](./README.assets/image-20240906150830431.png)
+
+![image-20240906151221507](./README.assets/image-20240906151221507.png)
+
+![image-20240906151244280](./README.assets/image-20240906151244280.png)
+
+上面的几种情况中，没有包含 `Cache-Control: no-cache`、`Cache-Control: max-age=0` 的情况，因为这类情况下，需要结合缓存存储策略与缓存验证策略，我们后面再进行介绍。
+
+除此之外，还有几种情况，我们可以验证一下
+
+
 
 **请求资源时，服务端的响应携带了 Cache-Control: private，或  Cache-Control: public**
 
@@ -90,21 +185,13 @@
 - 这种情况下的缓存行为不太可预测，且不同浏览器有不同表现。因此，建议总是明确指定 max-age 以控制缓存时间。如果响应中包含 Expires 头，浏览器可能会使用它来确定缓存时间。但 Cache-Control 通常优先于 Expires。
 - 这种情况下，虽然缓存了响应，浏览器可能会频繁验证资源是否更新；
 
-**请求资源时，服务端的响应没有携带 Cache-Control，携带了 Expires**
 
-- 浏览器会使用 Expires 头部来决定是否缓存响应以及缓存多长时间；Expires 指定了一个明确的过期日期和时间，浏览器会将响应缓存到指定的时间。格式示例：Expires: Wed, 21 Oct 2023 07:28:00 GMT
-- 浏览器会比较当前时间和 Expires 指定的时间。如果当前时间小于 Expires 时间，缓存被认为是有效的；
-- 时钟同步问题：Expires 依赖于客户端的时钟，可能因时钟不同步导致问题；
 
-**请求资源时，服务端的响应同时携带了 Cache-Control 和 Expires**
+**请求资源时，响应携带 Cache-Control: no-cache, 或 Cache-Control: max-age=0**
 
-- Cache-Control 的优先级高于 Expires。现代浏览器主要遵循 Cache-Control 的指令，只有在 Cache-Control 缺失或不支持时才考虑 Expires；
-- 如果 Cache-Control 和 Expires 指定的缓存时间不同，以 Cache-Control 为准；
-- 建议主要依赖 Cache-Control 进行缓存控制。添加 Expires 作为后备和兼容性措施；
+- 响应头中包含 `Cache-Control: no-cache` 时，意味着浏览器可以缓存这个资源。但是使用缓存资源时，浏览器必须向服务器验证这个缓存的资源是否仍然是最新的；
+- 响应头中包含 `Cache-Control: max-age=0` 时，意味着浏览器可以缓存这个资源，但是缓存的最大有效时间为 0 秒，立即过期。使用缓存资源时，浏览器必须向服务器验证这个缓存的资源是否仍然是最新的；
 
-**请求资源时，服务端的响应没有携带 Cache-Control 和 Expires**
+- 
 
-- 浏览器可能会采用启发式缓存（heuristic caching）。具体行为可能因浏览器而异；
-- Content-Type 可能影响缓存决策。静态资源（如图片、CSS）更可能被缓存。动态内容可能不会被缓存或只短暂缓存；
-- 对于 HTTPS 内容，没有明确缓存指令时，浏览器可能更倾向于不缓存；
-- 即使缓存，浏览器可能会频繁验证资源是否更新；
+- 

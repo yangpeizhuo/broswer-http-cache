@@ -9,15 +9,32 @@ const { koaBody } = require('koa-body');
 const app = new Koa();
 const router = new Router();
 
+async function logger(ctx, next) {
+  const start = Date.now();
+  await next();
+  const ms = Date.now() - start;
+  console.log(`Reauest ${ctx.method} ${ctx.url} - ${ms}ms - Response ${ctx.status}`);
+}
+
+app.use(logger);
+
 app.use(cors());
 app.use(koaBody());
 
 const testImage = fs.readFileSync(path.join(__dirname, '../static', 'test.jpg'));
 
+let i = 0;
 router.get('/:path*/test-image', async (ctx) => {
   try {
     ctx.type = 'image/jpeg';
-    ctx.set('Cache-Control', 'max-age=3600');
+    // ctx.set('Cache-Control', 'no-cache');
+    ctx.set('Cache-Control', 'private, max-age=3600');
+    ctx.set('Tomtom', i++);
+
+    // const expires = new Date(Date.now() + 60000);
+    // ctx.set('Expires', expires.toUTCString());
+
+    // ctx.set('Last-Modified', 'Fri, 06 Sep 2024 07:09:21 GMT');
 
     ctx.body = testImage;
   } catch (error) {
