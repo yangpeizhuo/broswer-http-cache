@@ -1,6 +1,7 @@
 # 浏览器的 HTTP 缓存体系
 
-
+> 本文将详细介绍浏览器的 HTTP 缓存体系，希望通过体系化的思考，让本人与读者对浏览器的 HTTP 缓存这一知识点有更深入的了解。
+>
 
 ## 前言
 
@@ -26,31 +27,26 @@
 
 如上文所说，缓存存储策略是为了解决响应是否可以被缓存的问题。这一般取决于服务端的设置，或遵循浏览器的默认行为。
 
-缓存存储策略受响应的 `Cache-Control` 头或 `Expires` 头的控制。``Cache-Control` 的取值 `max-age`、`no-cache`、`no-store` 都是用来指明响应内容是否可以被浏览器缓存的，其中前 2 种取值都会缓存文件数据（`no-cache` 应理解为“不建议使用本地缓存”，其仍然会缓存数据到本地），`no-store` 则不会在浏览器缓存任何响应数据。
+缓存存储策略受响应的 `Cache-Control` 头或 `Expires` 头的控制。`Cache-Control` 的取值 `max-age`、`no-cache`、`no-store` 都是用来指明响应内容是否可以被浏览器缓存的，其中前 2 种取值都会缓存文件数据（`no-cache` 应理解为“不建议使用本地缓存”，其仍然会缓存数据到本地），`no-store` 则不会在浏览器缓存任何响应数据。
 
 
 
 > `Cache-Control` 的取值有很多，且要区别 request Cache-Control 与 response Cache-Control。仅对于 response Cache-Control 来说，有如下几类取值：
 >
->   1. 基本缓存控制指令
->   - **no-store**：绝对禁止缓存数据。
->   - **no-cache**：资源可以被缓存，但在使用之前必须重新验证其有效性。
->   - **public**：指示响应可以被任何缓存区缓存。
->   - **private**：响应只能被单个用户的浏览器缓存，不适用于共享缓存（如代理服务器）。
->
->   2. 过期控制指令
->   - **max-age=[seconds]**：指定一个时间长度，在这段时间内，缓存被认为是新鲜的。
->   - **s-maxage=[seconds]**：类似于 `max-age`，但仅适用于共享缓存。
->   - **must-revalidate**：一旦缓存过期（即超过 `max-age`），必须去服务器验证是否有更新。
->   - **proxy-revalidate**：与 `must-revalidate` 类似，但仅适用于共享缓存。
->
->   3. 其他指令
->   - **immutable**：表明响应正文不会随时间改变，直到过期。
->   - **stale-while-revalidate=[seconds]**：在后台异步检查缓存时，客户端使用过期缓存的时间。
->   - **stale-if-error=[seconds]**：如果重新验证缓存时服务器出错，客户端使用过期缓存的时间。
->
+> | 分类             | 取值                             | 含义                                                         |
+> | ---------------- | -------------------------------- | ------------------------------------------------------------ |
+> | 基本缓存控制指令 | no-store                         | 绝对禁止缓存数据                                             |
+> |                  | no-cache                         | 资源可以被缓存，但在使用之前必须重新验证其有效性             |
+> |                  | public                           | 指示响应可以被任何缓存区缓存                                 |
+>|                  | private                          | 响应只能被单个用户的浏览器缓存，不适用于共享缓存（如代理服务器） |
+> | 过期控制指令     | max-age=[seconds]                | 指定一个时间长度，在这段时间内，缓存被认为是新鲜的           |
+> |                  | s-maxage=[seconds]               | 类似于 `max-age`，但仅适用于共享缓存                         |
+> |                  | must-revalidate                  | 一旦缓存过期（即超过 `max-age`），必须去服务器验证是否有更新 |
+> |                  | proxy-revalidate                 | 与 `must-revalidate` 类似，但仅适用于共享缓存                |
+> | 其他指令         | immutable                        | 表明响应正文不会随时间改变，直到过期                         |
+>|                  | stale-while-revalidate=[seconds] | 在后台异步检查缓存时，客户端使用过期缓存的时间               |
+> |                  | stale-if-error=[seconds]         | 如果重新验证缓存时服务器出错，客户端使用过期缓存的时间       |
 > 
->
 > 由于本文主要关注浏览器的缓存机制，因此需详细了解 `no-cache`、`no-store`、`max-age` 以及 `public`、`private` 这几种取值。
 
 
@@ -134,7 +130,7 @@ router.all('/:path*/test-request', async (ctx) => {
 
 
 
-但是在实际情况下，场景会复杂一些，而且我们上面也提到了，缓存存储策略不仅受 `Cache-Control` 头控制，还有 `Expires` 头也需要考虑，我们接下来再多验证几种情况：
+但是在实际情况下，场景会复杂一些。同时，缓存存储策略不仅受 `Cache-Control` 头控制， `Expires` 头也需要考虑，我们接下来再多验证几种情况：
 
 **请求资源时，服务端的响应没有携带 Cache-Control，携带了 Expires**
 
