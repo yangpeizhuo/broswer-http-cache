@@ -15,7 +15,7 @@
 - 减少回源请求次数，减轻服务器负载；
 - 提高页面加载速度，优化用户体验；
 
-## 浏览器的 HTTP 缓存体系
+## 三大策略
 
 浏览器的 HTTP 缓存体系分为以下三个部分：
 
@@ -23,9 +23,11 @@
 - 缓存过期策略：已存在的缓存是否可用、是否过期；
 - 缓存对比策略：服务端如何对比客户端缓存与源站资源；
 
-### 缓存存储策略
+## 缓存存储策略
 
 如上文所说，缓存存储策略是为了解决响应是否可以被缓存的问题。这一般取决于服务端的设置，或遵循浏览器的默认行为。
+
+### Cache-Control & Expires
 
 缓存存储策略受响应的 `Cache-Control` 头或 `Expires` 头的控制。`Cache-Control` 的取值 `max-age`、`no-cache`、`no-store` 都是用来指明响应内容是否可以被浏览器缓存的，其中前 2 种取值都会缓存文件数据（`no-cache` 应理解为“不建议使用本地缓存”，其仍然会缓存数据到本地），`no-store` 则不会在浏览器缓存任何响应数据。
 
@@ -36,22 +38,20 @@
 > | 分类             | 取值                             | 含义                                                         |
 > | ---------------- | -------------------------------- | ------------------------------------------------------------ |
 > | 基本缓存控制指令 | no-store                         | 绝对禁止缓存数据                                             |
-> |                  | no-cache                         | 资源可以被缓存，但在使用之前必须重新验证其有效性             |
-> |                  | public                           | 指示响应可以被任何缓存区缓存                                 |
+> |                  | no-cache                         | 响应可以被缓存，但在使用之前必须重新验证其有效性             |
+> |                  | public                           | 响应可以被任何缓存区缓存                                     |
 >|                  | private                          | 响应只能被单个用户的浏览器缓存，不适用于共享缓存（如代理服务器） |
 > | 过期控制指令     | max-age=[seconds]                | 指定一个时间长度，在这段时间内，缓存被认为是新鲜的           |
 > |                  | s-maxage=[seconds]               | 类似于 `max-age`，但仅适用于共享缓存                         |
 > |                  | must-revalidate                  | 一旦缓存过期（即超过 `max-age`），必须去服务器验证是否有更新 |
 > |                  | proxy-revalidate                 | 与 `must-revalidate` 类似，但仅适用于共享缓存                |
-> | 其他指令         | immutable                        | 表明响应正文不会随时间改变，直到过期                         |
->|                  | stale-while-revalidate=[seconds] | 在后台异步检查缓存时，客户端使用过期缓存的时间               |
+> | 其他指令         | immutable                        | 响应正文不会随时间改变，直到过期                             |
+>|                  | stale-while-revalidate=[seconds] | 后台异步检查缓存时，客户端使用过期缓存的时间                 |
 > |                  | stale-if-error=[seconds]         | 如果重新验证缓存时服务器出错，客户端使用过期缓存的时间       |
 > 
 > 由于本文主要关注浏览器的缓存机制，因此需详细了解 `no-cache`、`no-store`、`max-age` 以及 `public`、`private` 这几种取值。
 
 
-
-#### 实际验证
 
 我在本地搭建了一个简单的场景进行验证:
 
@@ -61,7 +61,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Client 2</title>
+  <title>Client 1</title>
 </head>
 <body>
   <img src="http://localhost/test-image" width="200" height="200" alt="test-image">
@@ -75,6 +75,7 @@
   </script>
 </body>
 </html>
+
 
 ```
 
@@ -112,7 +113,7 @@ router.all('/:path*/test-request', async (ctx) => {
 
 > 直接在浏览器的地址栏中输入 URL 去请求资源时，浏览器通常不会遵循常规缓存策略。因为这种请求行为往往更倾向于获取到最新的资源，避免因为使用了过时的缓存而导致问题或误解。
 >
-> 这与通过页面内元素（如 `<img>` 标签）或脚本（如 `fetch` API）发起的请求略有不同，后者更依赖并遵循 HTTP 缓存头的指示进行资源的缓存和重用。
+> 这与通过页面内元素（如 `<img>` 标签）发起的请求略有不同，后者更依赖并遵循 HTTP 缓存头的指示进行资源的缓存和重用。
 >
 > ![image-20240906130411373](./README.assets/image-20240906130411373.png)
 
@@ -126,15 +127,15 @@ router.all('/:path*/test-request', async (ctx) => {
 
 **请求资源时，响应携带 Cache-Control: max-age=3600**
 
-- 服务器在响应中设置了 `Cache-Control: max-age=3600` 指令时，这意味着浏览器（以及任何中间缓存，如代理服务器）被指示可以将该响应存储在缓存中，并且可以在接下来的 3600 秒（即 1 小时）内重用该缓存，而无需再次向服务器请求；
+- 服务器在响应中设置了 `Cache-Control: max-age=3600` 指令时，这意味着浏览器（以及任何中间缓存，如代理服务器）被指示可以将该响应存储在缓存中，并且可以在接下来的 3600 秒内重用该缓存，而无需再次向服务器请求；
 
 
 
-但是在实际情况下，场景会复杂一些。同时，缓存存储策略不仅受 `Cache-Control` 头控制， `Expires` 头也需要考虑，我们接下来再多验证几种情况：
+实际应用场景中，还有存在各种情况，且缓存存储策略不仅受 `Cache-Control` 头控制， `Expires` 头也需要考虑，我们再多验证几种情况：
 
 **请求资源时，服务端的响应没有携带 Cache-Control，携带了 Expires**
 
-- 服务器在响应中仅设置了 `Expires` 头时，浏览器的行为将依赖于 `Expires` 头来决定缓存策略。`Expires` 头提供了一个具体的日期/时间，告诉浏览器该资源在这个时间点之前都被认为是新鲜的，可以从缓存中直接获取而无需向服务器再次请求；
+- 如果响应中仅设置了 `Expires` 头，浏览器的将根据 `Expires` 头来决定缓存策略。`Expires` 头提供了一个具体的日期/时间，告诉浏览器该资源在这个时间点之前都被认为是新鲜的，可以从缓存中直接获取而无需向服务器再次请求；
 
 ![image-20240906145140764](./README.assets/image-20240906145140764.png)
 
@@ -144,7 +145,7 @@ router.all('/:path*/test-request', async (ctx) => {
 
 **请求资源时，服务端的响应同时携带了 Cache-Control 和 Expires**
 
-- 如果响应中同时存在 `Cache-Control` 和 `Expires`，浏览器会优先考虑 `Cache-Control` 的指令。例如，如果 `Cache-Control` 设置为 `max-age=3600`（资源应在 3600 秒后被视为过期），这将覆盖 `Expires` 头中的任何日期/时间设置。
+- 如果响应中同时设置了 `Cache-Control` 和 `Expires`，浏览器会优先考虑 `Cache-Control` 的指令。例如，如果 `Cache-Control` 设置为 `max-age=3600`（资源应在 3600 秒后被视为过期），这将覆盖 `Expires` 头中的任何日期/时间设置。
 
 ![image-20240906150254461](./README.assets/image-20240906150254461.png)
 
@@ -155,9 +156,9 @@ router.all('/:path*/test-request', async (ctx) => {
 **请求资源时，服务端的响应没有携带 Cache-Control 和 Expires**
 
 - 在没有明确缓存指令的情况下，大多数现代浏览器会尝试使用启发式方法来决定资源的缓存时间。这通常基于资源的最后修改时间（如果有的话）：
-  1. 如果响应头中包含 `Last-Modified` 日期，浏览器可能会使用这个日期与响应被接收的时间之间的差值的一部分（如10%）来估算一个缓存时间。这意味着如果资源经常被更新，它可能会被较短时间地缓存；如果很少更新，可能会被较长时间地缓存；
-  2. 如果没有 `Last-Modified` 或其他明确的缓存信息，浏览器可能默认设置资源不被缓存。这种行为可以防止浏览器缓存可能已经变更的资源；
-  3. Content-Type 可能影响缓存决策。静态资源（如图片、CSS）更可能被缓存。动态内容可能不会被缓存或只短暂缓存；
+  - 如果响应中设置了 `Last-Modified` ，浏览器会使用这个日期与响应被接收的时间之间的差值的一部分（如10%）来估算一个缓存时间。这意味着如果资源经常被更新，它可能会被较短时间地缓存；如果很少更新，可能会被较长时间地缓存；
+  - 如果如果响应中没有设置 `Last-Modified` ，浏览器可能默认设置资源不被缓存。这种行为可以防止浏览器缓存已经变更的资源；
+  - `Content-Type` 可能影响缓存决策。静态资源（如图片、CSS）更可能被缓存相对较长的时间，动态内容可能不会被缓存或只短暂缓存；
 
 ![image-20240906150817267](./README.assets/image-20240906150817267.png)
 
@@ -167,19 +168,91 @@ router.all('/:path*/test-request', async (ctx) => {
 
 ![image-20240906151244280](./README.assets/image-20240906151244280.png)
 
-上面的几种情况中，没有包含 `Cache-Control: no-cache`、`Cache-Control: max-age=0` 的情况，因为这类情况下，需要结合缓存存储策略与缓存验证策略，我们后面再进行介绍。
+上面的几种情况中，没有包含 `Cache-Control: no-cache`、`Cache-Control: max-age=0` 的情况，此时需要结合缓存存储策略与缓存验证策略，我们后面再进行介绍。
 
-除此之外，还有几种情况，我们可以验证一下
+此外，我们一直没有提及 `private` 和 `public` 这两种取值，它们明显与 `Cache-Control`  的其他取值不同，表示对缓存存储位置的限制，因此通常都会和 `max-age` 等组合使用，如果没有明确指定，浏览器默认按照 `public` 处理（即上面我们验证的情况都是 `public`） 。
+
+`public` 表示响应可以被任何缓存区缓存，`private` 表示响应只能被单个用户的浏览器缓存，不适用于共享缓存（如 CDN、代理服务器）。如果仅考虑浏览器缓存的情况，`private` 取值会产生什么影响？
 
 
 
-**请求资源时，服务端的响应携带了 Cache-Control: private，或  Cache-Control: public**
+**请求资源时，服务端的响应携带了 Cache-Control: private**
 
-- 浏览器通常会缓存这个响应，因为 private 指令允许浏览器进行私有缓存；
-- 由于没有明确的 max-age，浏览器会使用启发式缓存（heuristic caching）。启发式缓存：浏览器会根据其他响应头来估算一个合理的缓存时间。通常基于 Last-Modified 头（如果存在）。常见算法：如果有 Last-Modified，缓存时间可能是 (当前时间 - Last-Modified) 10%。例如，如果资源在5天前修改，可能会缓存约12小时；
-- 不同浏览器可能有不同的启发式算法。一些浏览器可能默认缓存较短时间，如几小时或一天。
-- 这种情况下的缓存行为不太可预测，且不同浏览器有不同表现。因此，建议总是明确指定 max-age 以控制缓存时间。如果响应中包含 Expires 头，浏览器可能会使用它来确定缓存时间。但 Cache-Control 通常优先于 Expires。
-- 这种情况下，虽然缓存了响应，浏览器可能会频繁验证资源是否更新；
+- 在仅考虑浏览器缓存的情况下，`public` 和 `private` 实际上没有明显的区别。即使指定了 ` Cache-Control: private`，同一设备、同一用户的两个不同网站客户端，同一资源的缓存也是共享的；
+
+
+
+Client 1 请求 test-image，此时无缓存：
+
+![image-20240913142616186](./README.assets/image-20240913142616186.png)
+
+![image-20240913142737368](./README.assets/image-20240913142737368.png)
+
+Client 2 请求 test-image，首次请求直接命中了缓存：
+
+![image-20240913142827567](./README.assets/image-20240913142827567.png)
+
+![image-20240913142905425](./README.assets/image-20240913142905425.png)
+
+Client 2 清除缓存刷新，重新回源获取资源：
+
+![image-20240913143023080](./README.assets/image-20240913143023080.png)
+
+![image-20240913143043805](./README.assets/image-20240913143043805.png)
+
+Client 1 也直接使用了更新后的缓存：
+
+![image-20240913143126079](./README.assets/image-20240913143126079.png)
+
+![image-20240913143146706](./README.assets/image-20240913143146706.png)
+
+由此可见，Client 1 与 Client 2 使用的是同一份 test-image 缓存。
+
+
+
+### **Dist Cache & Memory Cache**
+
+通过 Cache-Control 或 Expires 设置我们可以将 HTTP 响应数据存储到本地，但具体将缓存存储在哪里？这里涉及到 Disk Cache 和 Memory Cache。
+
+Disk Cache（磁盘缓存）和 Memory Cache（内存缓存）有区别：
+
+- 存储位置：disk cache：存储在硬盘上；memory cache：存储在 RAM 中；
+- 持久性：disk cache：关闭浏览器后仍然保留；memory cache：关闭浏览器后会清除读取；
+- 读写速度：disk cache：较慢；memory cache：快；
+- 存储容量：disk cache：容量较大 memory cache：容量有限；
+- 使用场景：disk cache：适合大文件和长期存储；memory cache：适合小文件和频繁访问的资源；
+- 资源类型：disk cache：各种类型的资源；memory cache：主要用于脚本、样式表等；
+
+
+
+浏览器会根据资源类型、大小和访问频率等因素决定使用哪种缓存。实际上，这两种缓存还会相互转化：
+
+初始缓存决策：
+
+- 文件大小：较小的文件更可能被存储在 Memory Cache 中；
+- 访问频率：频繁访问的资源更可能被保存在 Memory Cache 中以提高访问速度；
+- 资源类型：如 JavaScript 和 CSS 文件更倾向于存储在 Memory Cache 中；
+- 可用内存：当系统内存充足时，浏览器可能更倾向于使用 Memory Cache；
+
+从 Disk Cache 到 Memory Cache 的转换：
+
+- 频繁访问：如果一个最初存储在 Disk Cache 中的资源被频繁访问，浏览器可能会将其转移到 Memory Cache 中以提高访问速度；
+- 页面重新加载：有时在页面重新加载时，之前在 Disk Cache 中的资源可能会被加载到 Memory Cache 中。
+
+从 Memory Cache 到 Disk Cache 的转换：
+
+- 内存压力：当系统内存不足时，浏览器可能会将一些 Memory Cache 中的资源转移到 Disk Cache 中；
+- 长时间未访问：如果一个存储在 Memory Cache 中的资源长时间未被访问，它可能会被移动到 Disk Cache 中。
+
+
+
+我们继续基于上面的场景进行验证
+
+
+
+
+
+通过 Cache-Control 或 Expires 设置我们可以将 HTTP 响应数据存储到本地，但此时并不意味着后续浏览器会直接从缓存中读取数据并使用，因为它无法确定本地缓存的数据是否可用（可能已经失效），还必须借助一套鉴别机制来确认才行。
 
 
 

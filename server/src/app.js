@@ -21,20 +21,59 @@ app.use(logger);
 app.use(cors());
 app.use(koaBody());
 
+let css = 0;
+router.get('/:path*/test-css', async (ctx) => {
+  try {
+    ctx.type = 'text/css';
+    // ctx.set('Cache-Control', 'no-store');
+    ctx.set('Cache-Control','max-age=3600');
+    ctx.set('Test-Counter', css++);
+
+    ctx.body = `
+      body {
+        background-color: #000;
+      }
+    `;
+  } catch (error) {
+    ctx.status = 500;
+    ctx.body = 'Internal Server Error: Unable to generate css file';
+  }
+})
+
+let js = 0;
+router.get('/:path*/test-js', async (ctx) => {
+  try {
+    ctx.type = 'application/javascript';
+    // ctx.set('Cache-Control', 'no-store');
+    ctx.set('Cache-Control','max-age=3600');
+    ctx.set('Test-Counter', js++);
+
+    ctx.body = `
+      console.log('Hello World');
+    `;
+  } catch (error) {
+    ctx.status = 500;
+    ctx.body = 'Internal Server Error: Unable to generate js file';
+  }
+})
+
 const testImage = fs.readFileSync(path.join(__dirname, '../static', 'test.jpg'));
 
-let i = 0;
+let image = 0;
 router.get('/:path*/test-image', async (ctx) => {
   try {
     ctx.type = 'image/jpeg';
     // ctx.set('Cache-Control', 'no-cache');
-    ctx.set('Cache-Control', 'private, max-age=3600');
-    ctx.set('Tomtom', i++);
+    // ctx.set('Cache-Control', 'no-store');
+    ctx.set('Cache-Control', 'max-age=3600');
 
     // const expires = new Date(Date.now() + 60000);
     // ctx.set('Expires', expires.toUTCString());
 
     // ctx.set('Last-Modified', 'Fri, 06 Sep 2024 07:09:21 GMT');
+
+    // ctx.set('Cache-Control', 'private, max-age=3600');
+    ctx.set('Test-Counter', image++);
 
     ctx.body = testImage;
   } catch (error) {
@@ -53,7 +92,8 @@ router.all('/:path*/test-request', async (ctx) => {
     };
 
     ctx.type = 'json';
-    ctx.set('Cache-Control', 'no-store');
+    // ctx.set('Cache-Control', 'no-store');
+    ctx.set('Cache-Control', 'max-age=3600');
 
     ctx.body = responseContent;
   } catch (error) {
