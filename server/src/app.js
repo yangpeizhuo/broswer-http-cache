@@ -6,6 +6,8 @@ const Router = require('koa-router');
 const cors = require('@koa/cors');
 const { koaBody } = require('koa-body');
 
+const moment = require('moment');
+
 const app = new Koa();
 const router = new Router();
 
@@ -13,7 +15,9 @@ async function logger(ctx, next) {
   const start = Date.now();
   await next();
   const ms = Date.now() - start;
-  console.log(`Reauest ${ctx.method} ${ctx.url} - ${ms}ms - Response ${ctx.status}`);
+
+  const formatTime = moment().format('YYYY-MM-DD HH:mm:ss');
+  console.log(`[${formatTime}] Reauest ${ctx.method} ${ctx.url} - ${ms}ms - Response ${ctx.status}`);
 }
 
 app.use(logger);
@@ -25,7 +29,7 @@ let css = 0;
 router.get('/:path*/test-css', async (ctx) => {
   try {
     ctx.type = 'text/css';
-    // ctx.set('Cache-Control', 'no-store');
+
     ctx.set('Cache-Control','max-age=3600');
     ctx.set('Test-Counter', css++);
 
@@ -44,7 +48,7 @@ let js = 0;
 router.get('/:path*/test-js', async (ctx) => {
   try {
     ctx.type = 'application/javascript';
-    // ctx.set('Cache-Control', 'no-store');
+
     ctx.set('Cache-Control','max-age=3600');
     ctx.set('Test-Counter', js++);
 
@@ -57,9 +61,9 @@ router.get('/:path*/test-js', async (ctx) => {
   }
 })
 
-const testImage = fs.readFileSync(path.join(__dirname, '../static', 'test.jpg'));
+const commonImage = fs.readFileSync(path.join(__dirname, '../static', 'common.jpg'));
 
-let image = 0;
+let image1 = 0;
 router.get('/:path*/test-image', async (ctx) => {
   try {
     ctx.type = 'image/jpeg';
@@ -73,9 +77,26 @@ router.get('/:path*/test-image', async (ctx) => {
     // ctx.set('Last-Modified', 'Fri, 06 Sep 2024 07:09:21 GMT');
 
     // ctx.set('Cache-Control', 'private, max-age=3600');
-    ctx.set('Test-Counter', image++);
+    ctx.set('Test-Counter', image1++);
 
-    ctx.body = testImage;
+    ctx.body = commonImage;
+  } catch (error) {
+    ctx.status = 500;
+    ctx.body = 'Internal Server Error: Unable to read image file';
+  }
+})
+
+const largeImage = fs.readFileSync(path.join(__dirname, '../static', 'large.jpg'));
+
+let image2 = 0;
+router.get('/:path*/test-large-image', async (ctx) => {
+  try {
+    ctx.type = 'image/jpeg';
+
+    ctx.set('Cache-Control', 'max-age=3600');
+    ctx.set('Test-Counter', image2++);
+
+    ctx.body = largeImage;
   } catch (error) {
     ctx.status = 500;
     ctx.body = 'Internal Server Error: Unable to read image file';
