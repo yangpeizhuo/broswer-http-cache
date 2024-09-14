@@ -17,7 +17,7 @@
 
 ## 三大策略
 
-我修改了缓存策略三要素的说法，将浏览器的 HTTP 缓存体系概括为以下三个部分：
+我调整了缓存策略三要素的说法，将浏览器的 HTTP 缓存体系概括为三大策略：
 
 - 缓存存储策略：响应是否可以被缓存、在哪些地方被缓存、缓存多久；
 - 缓存校验策略：已存在的缓存是否可用、是否过期；
@@ -222,7 +222,7 @@ Client 1 也直接使用了更新后的缓存：
 
 相关文档：https://developer.mozilla.org/en-US/docs/Web/API/RequestInit#cache
 
-> 浏览器在其 HTTP 缓存中查找与请求匹配的响应。如果匹配并且是[新鲜的](https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching#fresh_and_stale_based_on_age)，它将从缓存中返回。如果有匹配项但已[过期](https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching#fresh_and_stale_based_on_age)，则浏览器将向远程服务器发出[条件请求](https://developer.mozilla.org/en-US/docs/Web/HTTP/Conditional_requests)。如果服务器指示资源未发生变化，则将从缓存中返回。否则将从服务器下载资源并更新缓存。如果不匹配，浏览器将发出正常请求，并使用下载的资源更新缓存。
+> 浏览器在其 HTTP 缓存中查找与请求匹配的响应。如果匹配并且是新鲜的，它将从缓存中返回。如果有匹配项但已过期]，则浏览器将向远程服务器发出条件请求。如果服务器指示资源未发生变化，则将从缓存中返回。否则将从服务器下载资源并更新缓存。如果不匹配，浏览器将发出正常请求，并使用下载的资源更新缓存。
 
 
 
@@ -373,21 +373,21 @@ router.all('/:path*/test-request', async (ctx) => {
 
 
 
-当系统内存充足时，浏览器可能更倾向于使用 Memory Cache，因此各类静态资源都被存储在了 Memory Cache 中：
+*当系统内存充足时，浏览器可能更倾向于使用 Memory Cache*，因此各类静态资源都被存储在了 Memory Cache 中：
 
 ![image-20240914115223463](./README.assets/image-20240914115223463.png)
 
-如果一个存储在 Memory Cache 中的资源长时间未被访问，它可能会被移动到 Disk Cache 中，因此一段时间后再次访问页面，原本在  Memory Cache 中的缓存被转移到 Disk Cache 中：
+*存储在 Memory Cache 中的资源长时间未被访问，浏览器可能会将其移动到 Disk Cache 中*，因此一段时间后再次访问页面，原本在  Memory Cache 中的缓存被转移到 Disk Cache 中：
 
 ![image-20240914115302163](./README.assets/image-20240914115302163.png)
 
-存储在 Disk Cache 中的资源被频繁访问，浏览器可能会将其转移到 Memory Cache 中以提高访问速度，因此连续刷新页面后，Disk Cache 中的缓存又重新被转移到 Memory Cache 中：
+*存储在 Disk Cache 中的资源被频繁访问，浏览器可能会将其转移到 Memory Cache 中以提高访问速度*，因此连续刷新页面后，Disk Cache 中的缓存又重新被转移到 Memory Cache 中：
 
 ![image-20240914115612256](./README.assets/image-20240914115612256.png)
 
 ### 请求影响响应
 
-同时还需要考虑的是，请求会影响响应的 `Cache-Control` 等缓存相关头部的生成与取值，例如：
+我们还需要知道的是，请求会影响响应的 `Cache-Control` 等缓存相关头部的生成，例如以下几种情况：
 
 - 请求 `Cache-Control` 头部：如果客户端请求包含 `Cache-Control`，服务器可能会响应相同的指令。例如：客户端 `Cache-Control: max-age=0` 可能导致服务器返回短期或无缓存的响应；
 - 请求 `Pragma` 头部：旧式的 `Pragma: no-cache` 可能导致服务器禁用缓存；
@@ -402,7 +402,29 @@ router.all('/:path*/test-request', async (ctx) => {
 
 ## 缓存校验策略
 
-通过 `Cache-Control` 或 `Expires` 设置我们可以将 HTTP 响应数据存储到本地，但此时并不意味着后续浏览器会直接从缓存中读取数据并使用，因为它无法确定本地缓存的数据是否可用（可能已经失效），还必须借助一套鉴别机制来确认才行。
+通过 `Cache-Control` 或 `Expires` 设置我们可以将 HTTP 响应数据存储到本地，但此时并不意味着后续浏览器会直接从缓存中读取数据并使用，因为它无法确定本地缓存的数据是否可用（可能已经失效），还必须借助一套鉴别机制来确认才行。这套机制在很多文章中被称为**缓存新鲜度判断**，而判断的具体流程就是强缓存到协商缓存的过度。
+
+### 强缓存 & 协商缓存
+
+强缓存：如果响应设置了过期时间或持续时间，那在这段时间内，就是强缓存逻辑；协商缓存：如果超过了缓存设置的过期时间，缓存不会直接失效，而是向服务端发起一个请求判断缓存时候还有效，这就是协商缓存逻辑；
 
 
 
+这里我们更关注的应该是协商缓存，协商缓存涉及到两个核心问题：
+
+1. 客户端需要将哪些数据传回服务端，才能让服务端能正确判断这个缓存是否过期？
+2. 服务端判定缓存是否过期后，服需要将哪些信息传回客户端，让客户端能重置或更新缓存？
+
+
+
+## 缓存对比策略
+
+
+
+
+
+## 其他
+
+上面介绍的内容，都是浏览器结合 HTTP 的缓存机制实现的行为，脱离了浏览器环境，上面的缓存机制分析不再适用。
+
+例如：在 Node.js 中使用 fetch API 发起一个 GET 请求，由于 Node.js 的 http/https 模块默认不实现缓存机制，每次请求都会直接发送到服务器。这种情况如果想要缓存 HTTP 响应，则需需要手动实现缓存逻辑。可以使用内存缓存、文件系统缓存或外部缓存服务。在实现缓存逻辑时，需要解析响应的 Cache-Control 头，遵循 HTTP 的缓存机制，自行编写逻辑来处理这些头部。多数 HTTP 请求库（如 axios, got）后提供了缓存插件或中间件，例如：`axios-cache-adapter`、``cacheable-request`。
