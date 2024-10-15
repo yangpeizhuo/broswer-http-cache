@@ -427,4 +427,4 @@ router.all('/:path*/test-request', async (ctx) => {
 
 上面介绍的内容，都是浏览器结合 HTTP 的缓存机制实现的行为，脱离了浏览器环境，上面的缓存机制分析不再适用。
 
-例如：在 Node.js 中使用 fetch API 发起一个 GET 请求，由于 Node.js 的 http/https 模块默认不实现缓存机制，每次请求都会直接发送到服务器。这种情况如果想要缓存 HTTP 响应，则需需要手动实现缓存逻辑。可以使用内存缓存、文件系统缓存或外部缓存服务。在实现缓存逻辑时，需要解析响应的 Cache-Control 头，遵循 HTTP 的缓存机制，自行编写逻辑来处理这些头部。多数 HTTP 请求库（如 axios, got）后提供了缓存插件或中间件，例如：`axios-cache-adapter`、``cacheable-request`。
+例如：在 Node.js 中使用 fetch API 发起一个 GET 请求，由于 Node.js 的 http/https 模块默认不实现缓存机制，每次请求都会直接发送到服务器。这种情况如果想要缓存 HTTP 响应，则需手动实现缓存逻辑（可以使用内存缓存、文件系统缓存或外部缓存服务）。在实现缓存逻辑时，需要解析响应的 Cache-Control 头，遵循 HTTP 的缓存机制，自行编写逻辑来处理这些数据。多数 HTTP 请求库（如 axios, got）后提供了缓存插件或中间件，例如：`axios-cache-adapter`、``cacheable-request`。
